@@ -19,18 +19,23 @@ BOOKS_DIR = "."
 
 # OpenAI configuration - reads from env var first, then .env file
 def load_env_file():
-    """Load key=value pairs from .env file if it exists."""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, value = line.partition("=")
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-                    if key and value:
-                        os.environ.setdefault(key, value)
+    """Load key=value pairs from any *.env file in the project directory."""
+    import glob
+    base = os.path.dirname(os.path.abspath(__file__))
+    # Find any file ending in .env (e.g. key.env, .env, mykeys.env)
+    candidates = glob.glob(os.path.join(base, "*.env")) + glob.glob(os.path.join(base, ".env"))
+    for env_path in candidates:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if k and v:
+                            os.environ.setdefault(k, v)
+            break  # stop after the first .env file found
 
 load_env_file()
 

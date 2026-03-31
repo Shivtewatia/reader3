@@ -2,7 +2,7 @@
 
 A lightweight, self-hosted EPUB reader that runs in your browser. Add books, scroll through chapters, and use Claude AI to explain passages as you read.
 
-![Reader3](reader3.png)
+![Reader3](reader3_1.png)
 
 ---
 
@@ -83,18 +83,20 @@ The reader has a built-in AI assistant powered by **Claude** (by Anthropic) that
 
 1. Go to [console.anthropic.com](https://console.anthropic.com/settings/keys)
 2. Sign up for a free account
-3. Click **Create Key**, give it a name, and copy the key (`...`)
+3. Click **Create Key**, give it a name, and copy the key (it starts with `...`)
 
 ### Add the key to the app
 
-1. Inside the `reader3` folder, create a new file called **`.env`** by Notepad++ ( if you are not sure - find out on the internet how to do that)
-   - On Windows: right-click inside the folder → New → Text Document → rename it to `.env` (make sure to remove the `.txt` extension)
-   - On Mac: open TextEdit, switch to plain text mode (Format → Make Plain Text), and save as `.env`
-2. Open the `.env` file and add this line (replace with your actual key):
+1. Inside the `reader3` folder, create a new text file called **`key.env`**
+   - On Windows: right-click inside the folder → New → Text Document → type the name `key.env` and press Enter
+   - On Mac: open TextEdit → Format → Make Plain Text → Save As `key.env`
+2. Open `key.env` and add this line, replacing the placeholder with your actual key:
    ```
-   ANTHROPIC_API_KEY=
+   ANTHROPIC_API_KEY=your-key-here
    ```
 3. Save the file and restart the app
+
+> **Note:** The file can be named anything as long as it ends in `.env` (e.g. `key.env`, `mykey.env`). Place it directly inside the `reader3` folder — not inside any subfolder. When you start the app, the command window will confirm with **"API key loaded from key.env"**.
 
 ### How to use it
 
@@ -142,7 +144,7 @@ Just repeat Step 2 — double-click `start.bat` (Windows) or run `./start.sh` (M
 → Try a different EPUB file. Some heavily formatted EPUBs from certain publishers may not render correctly.
 
 **The AI says "API key not configured"**
-→ Make sure your `.env` file is saved inside the `reader3` folder with no extra extensions (not `.env.txt`)
+→ Make sure your `key.env` file is saved directly inside the `reader3` folder (not in a subfolder) and contains the line `ANTHROPIC_API_KEY=sk-ant-...` with your actual key. Restart the app after saving it.
 
 ---
 

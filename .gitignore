@@ -9,9 +9,10 @@ wheels/
 # Virtual environment (created by uv on first run)
 .venv
 
-# API keys — NEVER commit this
+# API keys — NEVER commit these
 .env
 *.env
+key.env
 
 # Your books and library data — stays on your machine only
 *_data/
