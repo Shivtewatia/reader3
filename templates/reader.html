@@ -143,33 +143,15 @@
         .toolbar-btn.active { background: #e8e8e8; border-color: #ccc; }
         .toolbar-center { font-size: 0.85em; color: #999; }
 
-        /* ===== HORIZONTAL PAGINATION ===== */
-        .page-viewport {
+        /* ===== SCROLL VIEWPORT ===== */
+        .scroll-viewport {
             flex: 1;
-            overflow: hidden;
-            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
-        /*
-         * The page-container uses CSS columns to flow content horizontally.
-         * - column-width sets the width of each column (NO column-count limit!)
-         * - column-fill: auto fills columns sequentially
-         * - height: 100% constrains vertical space so content flows into new columns
-         * - overflow: visible lets columns extend beyond the container
-         * Navigation is done via scrollLeft on the viewport wrapper.
-         */
-        .page-scroller {
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            transition: left 0.35s ease;
-        }
-
-        .page-container {
-            height: 100%;
-            column-fill: auto;
-            column-gap: 0px; /* We handle gaps via padding inside columns */
+        .book-container {
+            padding: 20px 30px 40px;
         }
 
         .book-content {
@@ -177,7 +159,14 @@
         }
         .book-content img {
             max-width: 100%; height: auto; display: block;
-            margin: 20px auto; break-inside: avoid;
+            margin: 20px auto;
+        }
+        /* Override any EPUB inline styles that force page/column breaks */
+        .book-content * {
+            break-before: auto !important;
+            break-after: auto !important;
+            page-break-before: auto !important;
+            page-break-after: auto !important;
         }
         .book-content h1, .book-content h2, .book-content h3 {
             font-family: -apple-system, sans-serif;
@@ -188,21 +177,13 @@
             margin-bottom: 1em; text-align: justify;
         }
 
-        /* Page navigation */
-        .page-nav {
-            display: flex; align-items: center; justify-content: center;
-            gap: 20px; padding: 10px 16px;
-            border-top: 1px solid #eee; background: #fafafa; flex-shrink: 0;
-        }
-        .page-nav-btn {
-            background: none; border: 1px solid #ddd; border-radius: 8px;
-            cursor: pointer; padding: 8px 20px; font-size: 0.9em; color: #555;
+        /* Chapter navigation buttons in toolbar */
+        .chapter-nav-btn {
+            background: none; border: 1px solid #ddd; border-radius: 6px;
+            cursor: pointer; padding: 5px 12px; font-size: 0.82em; color: #555;
             transition: all 0.15s;
         }
-        .page-nav-btn:hover { background: #f0f0f0; border-color: #bbb; }
-        .page-nav-btn:disabled { opacity: 0.3; cursor: default; }
-        .page-nav-btn:disabled:hover { background: none; border-color: #ddd; }
-        .page-info { font-size: 0.85em; color: #999; min-width: 120px; text-align: center; }
+        .chapter-nav-btn:hover { background: #f0f0f0; border-color: #bbb; }
 
         /* ===== RIGHT PANEL (LLM) ===== */
         #right-panel {
@@ -318,13 +299,6 @@
         <!-- Typography Tab -->
         <div id="tab-typography" class="left-tab-content">
             <div class="setting-group">
-                <div class="setting-label">Page View</div>
-                <div class="page-view-toggle">
-                    <button class="page-view-btn active" onclick="setPageView('single')" id="pv-single">Single</button>
-                    <button class="page-view-btn" onclick="setPageView('double')" id="pv-double">Double</button>
-                </div>
-            </div>
-            <div class="setting-group">
                 <div class="setting-label">Font Family</div>
                 <select class="setting-select" id="font-family-select" onchange="setFontFamily(this.value)">
                     <option value="Georgia, serif">Georgia</option>
@@ -371,32 +345,28 @@
         <div class="toolbar">
             <div class="toolbar-left">
                 <button class="toolbar-btn active" id="btn-left-panel" onclick="toggleLeftPanel()" title="Toggle sidebar">&#9776;</button>
+                {% if prev_idx is not none %}
+                <button class="chapter-nav-btn" onclick="window.location.href='/read/{{ book_id }}/{{ prev_idx }}'">&#8592; Prev Chapter</button>
+                {% endif %}
             </div>
             <div class="toolbar-center">
                 Section {{ chapter_index + 1 }} of {{ book.spine|length }}
             </div>
             <div class="toolbar-right">
-                <button class="toolbar-btn" id="btn-right-panel" onclick="toggleRightPanel()" title="Toggle AI panel">&#10024; AI</button>
+                {% if next_idx is not none %}
+                <button class="chapter-nav-btn" onclick="window.location.href='/read/{{ book_id }}/{{ next_idx }}'">Next Chapter &#8594;</button>
+                {% endif %}
+                <button class="toolbar-btn" id="btn-right-panel" onclick="toggleRightPanel()" title="Toggle AI panel">&#10024; Claude AI</button>
             </div>
         </div>
 
-        <!-- Page Viewport: clips the visible area -->
-        <div class="page-viewport" id="page-viewport">
-            <!-- Scroller: positioned absolutely, shifted left/right to show pages -->
-            <div class="page-scroller" id="page-scroller">
-                <!-- Container: CSS columns flow content horizontally -->
-                <div class="page-container" id="page-container">
-                    <div class="book-content" id="book-content">
-                        {{ current_chapter.content | safe }}
-                    </div>
+        <!-- Scrollable content area -->
+        <div class="scroll-viewport" id="scroll-viewport">
+            <div class="book-container" id="book-container">
+                <div class="book-content" id="book-content">
+                    {{ current_chapter.content | safe }}
                 </div>
             </div>
-        </div>
-
-        <div class="page-nav">
-            <button class="page-nav-btn" id="btn-prev-page" onclick="prevPage()">&#8592; Prev</button>
-            <span class="page-info" id="page-info">Page 1 of 1</span>
-            <button class="page-nav-btn" id="btn-next-page" onclick="nextPage()">Next &#8594;</button>
         </div>
     </div>
 
@@ -462,12 +432,14 @@
         }
 
         function applySettings() {
-            // Apply typography to book content directly
             const content = document.getElementById('book-content');
             content.style.fontSize = settings.fontSize + 'em';
             content.style.fontFamily = settings.fontFamily;
             content.style.fontWeight = settings.fontWeight;
             content.style.lineHeight = settings.lineHeight;
+
+            // Apply zoom to the book container
+            document.getElementById('book-container').style.zoom = settings.zoom;
 
             // Update UI controls
             document.getElementById('font-size-display').textContent = settings.fontSize.toFixed(2) + 'em';
@@ -475,10 +447,6 @@
             document.getElementById('font-weight-range').value = settings.fontWeight;
             document.getElementById('line-height-range').value = settings.lineHeight;
             document.getElementById('zoom-display').textContent = Math.round(settings.zoom * 100) + '%';
-
-            // Page view
-            document.getElementById('pv-single').classList.toggle('active', settings.pageView === 'single');
-            document.getElementById('pv-double').classList.toggle('active', settings.pageView === 'double');
 
             // Panels
             document.getElementById('left-panel').classList.toggle('collapsed', !settings.leftPanelOpen);
@@ -506,24 +474,21 @@
         }
         function adjustZoom(delta) {
             settings.zoom = Math.max(0.7, Math.min(1.5, +(settings.zoom + delta).toFixed(2)));
-            saveSettings(); applySettings(); scheduleRecalc();
+            saveSettings(); applySettings();
         }
         function setPageView(mode) {
             settings.pageView = mode;
-            currentPage = 0; // Reset to first page on mode change
-            saveSettings(); applySettings(); scheduleRecalc();
+            saveSettings(); applySettings();
         }
 
         // ===== PANEL TOGGLES =====
         function toggleLeftPanel() {
             settings.leftPanelOpen = !settings.leftPanelOpen;
             saveSettings(); applySettings();
-            setTimeout(recalcPages, 350); // Wait for CSS transition
         }
         function toggleRightPanel() {
             settings.rightPanelOpen = !settings.rightPanelOpen;
             saveSettings(); applySettings();
-            setTimeout(recalcPages, 350);
         }
         function switchLeftTab(tab) {
             document.querySelectorAll('.left-tab-btn').forEach(b => b.classList.remove('active'));
@@ -532,121 +497,15 @@
             event.target.classList.add('active');
         }
 
-        // ===== HORIZONTAL PAGINATION =====
-        let currentPage = 0;
-        let totalPages = 1;
-        let pageWidth = 0;  // Width of one "page turn" step
-        let recalcTimer = null;
-
-        function scheduleRecalc() {
-            clearTimeout(recalcTimer);
-            recalcTimer = setTimeout(recalcPages, 50);
+        // ===== ZOOM =====
+        function applyZoom() {
+            document.getElementById('book-container').style.zoom = settings.zoom;
         }
 
-        function recalcPages() {
-            const viewport = document.getElementById('page-viewport');
-            const scroller = document.getElementById('page-scroller');
-            const container = document.getElementById('page-container');
-
-            const vw = viewport.clientWidth;
-            const vh = viewport.clientHeight;
-
-            if (vw === 0 || vh === 0) return; // Not visible yet
-
-            // Apply zoom via transform on scroller
-            const zoom = settings.zoom;
-            scroller.style.transform = `scale(${zoom})`;
-            scroller.style.transformOrigin = 'top left';
-
-            // The effective area available for content (accounting for zoom)
-            const effectiveWidth = Math.floor(vw / zoom);
-            const effectiveHeight = Math.floor(vh / zoom);
-
-            // Padding inside each page column
-            const PAD = 50;
-            const GAP = 60;
-
-            if (settings.pageView === 'double') {
-                // Double page: 2 columns per "page turn"
-                const colWidth = Math.floor((effectiveWidth - GAP - PAD * 2) / 2);
-                container.style.columnWidth = colWidth + 'px';
-                container.style.columnGap = GAP + 'px';
-                container.style.padding = `30px ${PAD}px`;
-                // Each page turn = full effectiveWidth
-                pageWidth = effectiveWidth;
-            } else {
-                // Single page: 1 column per "page turn"
-                // We set columnWidth = effectiveWidth - padding, and columnGap = big enough
-                // so each column + gap = effectiveWidth exactly
-                const colWidth = effectiveWidth - PAD * 2;
-                container.style.columnWidth = colWidth + 'px';
-                container.style.columnGap = (PAD * 2) + 'px';
-                container.style.padding = `30px ${PAD}px`;
-                // Each page turn = effectiveWidth
-                pageWidth = effectiveWidth;
-            }
-
-            // Set container width to a huge value so columns are not constrained
-            container.style.width = '999999px';
-            container.style.height = effectiveHeight + 'px';
-
-            // Let the browser lay out columns, then measure
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    const scrollW = container.scrollWidth;
-                    totalPages = Math.max(1, Math.round(scrollW / pageWidth));
-
-                    // Set the scroller width so it exactly covers all pages
-                    scroller.style.width = (totalPages * pageWidth) + 'px';
-                    scroller.style.height = effectiveHeight + 'px';
-
-                    // Clamp current page
-                    if (currentPage >= totalPages) currentPage = totalPages - 1;
-                    if (currentPage < 0) currentPage = 0;
-
-                    goToPage(currentPage);
-                });
-            });
-        }
-
-        function goToPage(page) {
-            const scroller = document.getElementById('page-scroller');
-            currentPage = Math.max(0, Math.min(page, totalPages - 1));
-
-            // Shift the scroller left
-            const offset = currentPage * pageWidth;
-            scroller.style.left = `-${offset}px`;
-
-            updatePageInfo();
-        }
-
-        function prevPage() {
-            if (currentPage > 0) {
-                goToPage(currentPage - 1);
-            } else if (prevIdx !== null) {
-                window.location.href = `/read/${bookId}/${prevIdx}`;
-            }
-        }
-
-        function nextPage() {
-            if (currentPage < totalPages - 1) {
-                goToPage(currentPage + 1);
-            } else if (nextIdx !== null) {
-                window.location.href = `/read/${bookId}/${nextIdx}`;
-            }
-        }
-
-        function updatePageInfo() {
-            document.getElementById('page-info').textContent =
-                `Page ${currentPage + 1} of ${totalPages}`;
-            document.getElementById('btn-prev-page').disabled = (currentPage <= 0 && prevIdx === null);
-            document.getElementById('btn-next-page').disabled = (currentPage >= totalPages - 1 && nextIdx === null);
-        }
-
-        // Keyboard navigation
+        // Keyboard: arrow keys navigate between chapters
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') { e.preventDefault(); prevPage(); }
-            if (e.key === 'ArrowRight') { e.preventDefault(); nextPage(); }
+            if (e.key === 'ArrowLeft' && prevIdx !== null) window.location.href = `/read/${bookId}/${prevIdx}`;
+            if (e.key === 'ArrowRight' && nextIdx !== null) window.location.href = `/read/${bookId}/${nextIdx}`;
         });
 
         // ===== CUSTOM CONTEXT MENU =====
@@ -684,7 +543,6 @@
             if (!settings.rightPanelOpen) {
                 settings.rightPanelOpen = true;
                 saveSettings(); applySettings();
-                setTimeout(recalcPages, 350);
             }
 
             // Hide empty state
@@ -761,17 +619,6 @@
         // ===== INIT =====
         loadSettings();
         applySettings();
-
-        window.addEventListener('load', () => {
-            // Give browser time to render the content before measuring columns
-            setTimeout(recalcPages, 200);
-        });
-
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(recalcPages, 200);
-        });
     </script>
 </body>
 </html>

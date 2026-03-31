@@ -3,13 +3,13 @@ import pickle
 from functools import lru_cache
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from reader3 import Book, BookMetadata, ChapterContent, TOCEntry
+from reader3 import Book, BookMetadata, ChapterContent, TOCEntry, process_epub, save_to_pickle
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -34,8 +34,8 @@ def load_env_file():
 
 load_env_file()
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
 
 class ChatRequest(BaseModel):
@@ -153,11 +153,11 @@ async def serve_image(book_id: str, image_name: str):
 
 @app.post("/api/chat")
 async def chat_with_llm(req: ChatRequest):
-    """LLM chat endpoint - sends selected text + book context to OpenAI."""
-    if not OPENAI_API_KEY:
+    """LLM chat endpoint - sends selected text + book context to Claude."""
+    if not ANTHROPIC_API_KEY:
         return JSONResponse(
             status_code=400,
-            content={"error": "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."}
+            content={"error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY environment variable."}
         )
 
     book = load_book_cached(req.book_id)
@@ -205,29 +205,86 @@ The user has selected some text and wants you to explain it. Provide a clear, in
     user_message = f'Please explain this passage from the book:\n\n"{req.selected_text}"'
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
             max_tokens=2000,
-            temperature=0.7
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}]
         )
 
-        return {"response": response.choices[0].message.content}
+        return {"response": response.content[0].text}
 
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"OpenAI API error: {str(e)}"}
+            content={"error": f"Claude API error: {str(e)}"}
         )
 
 
+@app.post("/upload")
+async def upload_epub(file: UploadFile = File(...)):
+    """Upload and process an EPUB file, adding it to the library."""
+    if not file.filename.lower().endswith(".epub"):
+        return JSONResponse(status_code=400, content={"error": "Only .epub files are supported."})
+
+    # Sanitize filename
+    safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ").strip()
+    if not safe_name.lower().endswith(".epub"):
+        safe_name += ".epub"
+
+    epub_path = os.path.join(BOOKS_DIR, safe_name)
+    out_dir = os.path.join(BOOKS_DIR, os.path.splitext(safe_name)[0] + "_data")
+
+    try:
+        # Save uploaded EPUB to disk
+        content = await file.read()
+        with open(epub_path, "wb") as f:
+            f.write(content)
+
+        # Process into structured book data
+        book = process_epub(epub_path, out_dir)
+        save_to_pickle(book, out_dir)
+
+        # Clear the cache so the new book appears in the library
+        load_book_cached.cache_clear()
+
+        book_id = os.path.basename(out_dir)
+        return {"book_id": book_id, "title": book.metadata.title}
+
+    except Exception as e:
+        # Clean up partial files on failure
+        if os.path.exists(epub_path):
+            os.remove(epub_path)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 if __name__ == "__main__":
+    import socket
+    import threading
+    import webbrowser
     import uvicorn
-    print("Starting server at http://127.0.0.1:8123")
-    uvicorn.run(app, host="127.0.0.1", port=8123)
+
+    # Find a free port starting at 8123
+    def find_free_port(start=8123):
+        for port in range(start, start + 10):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        return start
+
+    port = find_free_port()
+    url = f"http://127.0.0.1:{port}"
+
+    # Open the browser automatically after the server is up
+    def open_browser():
+        import time
+        time.sleep(1.5)
+        webbrowser.open(url)
+
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    print(f"Starting server at {url}")
+    uvicorn.run(app, host="127.0.0.1", port=port)

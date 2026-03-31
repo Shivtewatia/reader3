@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv --version)",
+      "Bash(curl -LsSf https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "Bash(source /c/Users/user/.local/bin/env)",
+      "Bash(uv sync:*)",
+      "Bash(taskkill //F //IM python.exe)"
+    ]
+  }
+}
