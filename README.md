@@ -83,7 +83,7 @@ The reader has a built-in AI assistant powered by **Claude** (by Anthropic) that
 
 1. Go to [console.anthropic.com](https://console.anthropic.com/settings/keys)
 2. Sign up for a free account
-3. Click **Create Key**, give it a name, and copy the key (it starts with `...`)
+3. Click **Create Key**, give it a name, and copy the key (`...`)
 
 ### Add the key to the app
 
