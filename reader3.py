@@ -51,6 +51,7 @@ class BookMetadata:
     date: Optional[str] = None
     identifiers: List[str] = field(default_factory=list)
     subjects: List[str] = field(default_factory=list)
+    cover_image: Optional[str] = None  # Relative path to cover image
 
 
 @dataclass
@@ -146,6 +147,64 @@ def get_fallback_toc(book_obj) -> List[TOCEntry]:
     return toc
 
 
+def extract_cover_image(book_obj, image_map: Dict[str, str]) -> Optional[str]:
+    """
+    Try multiple strategies to find the cover image in an EPUB.
+    Returns the relative path (e.g., 'images/cover.jpg') or None.
+    """
+    # Strategy A: Look for ITEM_COVER type
+    for item in book_obj.get_items():
+        if item.get_type() == ebooklib.ITEM_COVER:
+            name = item.get_name()
+            basename = os.path.basename(name)
+            if name in image_map:
+                return image_map[name]
+            if basename in image_map:
+                return image_map[basename]
+
+    # Strategy B: OPF metadata 'cover' property pointing to an item ID
+    cover_meta = book_obj.get_metadata('OPF', 'cover')
+    if cover_meta:
+        cover_id = cover_meta[0][1] if isinstance(cover_meta[0], tuple) else cover_meta[0]
+        if isinstance(cover_id, dict):
+            cover_id = cover_id.get('content', '')
+        cover_item = book_obj.get_item_with_id(str(cover_id))
+        if cover_item:
+            name = cover_item.get_name()
+            basename = os.path.basename(name)
+            if name in image_map:
+                return image_map[name]
+            if basename in image_map:
+                return image_map[basename]
+
+    # Strategy C: Search for items with 'cover' in name/id
+    for item in book_obj.get_items():
+        if item.get_type() == ebooklib.ITEM_IMAGE:
+            item_name = item.get_name().lower()
+            item_id = (item.id or '').lower()
+            if 'cover' in item_name or 'cover' in item_id:
+                name = item.get_name()
+                basename = os.path.basename(name)
+                if name in image_map:
+                    return image_map[name]
+                if basename in image_map:
+                    return image_map[basename]
+
+    # Strategy D: First image found in the first spine document
+    for item in book_obj.get_items():
+        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+            content = item.get_content().decode('utf-8', errors='ignore')
+            soup = BeautifulSoup(content, 'html.parser')
+            img = soup.find('img')
+            if img and img.get('src'):
+                src = os.path.basename(unquote(img['src']))
+                if src in image_map:
+                    return image_map[src]
+            break  # Only check first document
+
+    return None
+
+
 def extract_metadata_robust(book_obj) -> BookMetadata:
     """
     Extracts metadata handling both single and list values.
@@ -208,6 +267,14 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
             rel_path = f"images/{safe_fname}"
             image_map[item.get_name()] = rel_path
             image_map[original_fname] = rel_path
+
+    # 4b. Extract Cover Image
+    print("Extracting cover image...")
+    metadata.cover_image = extract_cover_image(book, image_map)
+    if metadata.cover_image:
+        print(f"  Cover found: {metadata.cover_image}")
+    else:
+        print("  No cover image found.")
 
     # 5. Process TOC
     print("Parsing Table of Contents...")
@@ -311,3 +378,4 @@ if __name__ == "__main__":
     print(f"Physical Files (Spine): {len(book_obj.spine)}")
     print(f"TOC Root Items: {len(book_obj.toc)}")
     print(f"Images extracted: {len(book_obj.images)}")
+    print(f"Cover image: {book_obj.metadata.cover_image or 'None'}")
