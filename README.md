@@ -105,9 +105,18 @@ The reader has a built-in AI assistant powered by **Claude** (by Anthropic) that
 
 ---
 
+## Important — Keep the Window Open
+
+> **Do not close the command window (CMD) while you are using the app in your browser.**
+> The command window is the engine running the server. If you close it, the app will stop working and you will see an error in your browser.
+>
+> Just leave it running in the background while you read. You can minimise it.
+
 ## Stopping the App
 
-- **Windows:** Close the black command window, or press `Ctrl + C` inside it
+When you are finished reading and want to fully close the app:
+
+- **Windows:** Press `Ctrl + C` inside the command window, then close it
 - **Mac/Linux:** Press `Ctrl + C` in the Terminal
 
 ---
